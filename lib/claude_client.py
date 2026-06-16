@@ -15,16 +15,8 @@ def _get_client(api_key: str) -> Anthropic:
 
 def analyze_reviews(api_key: str, reviews: list[str]) -> AnalyzeResult:
     system, user = build_review_analysis_prompt(reviews)
-    client = _get_client(api_key)
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=ANALYZE_MAX_TOKENS,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
-    truncated = getattr(resp, "stop_reason", None) == "max_tokens"
-    return AnalyzeResult(text=text, truncated=truncated)
+    r = _generate(api_key, system, user, ANALYZE_MAX_TOKENS)
+    return AnalyzeResult(text=r.text, truncated=r.truncated)
 
 
 PROPOSE_MAX_TOKENS = 8000  # 構成案3案フル（EPR6枚等）が途中で切れない余裕（旧版から）
