@@ -6,13 +6,11 @@ from lib.cost import estimate_jpy
 from lib.claude_client import (
     analyze_reviews,
     ANALYZE_MAX_TOKENS,
-    propose_layouts,
-    propose_copy,
-    PROPOSE_MAX_TOKENS,
-    COPY_MAX_TOKENS,
+    propose_creative,
+    COMBINED_MAX_TOKENS,
 )
-from lib.parsing import parse_layout_proposals, parse_copy_slides, build_copy_draft
-from lib.prompts import build_layout_prompt, build_copy_prompt
+from lib.parsing import parse_layout_proposals
+from lib.prompts import build_creative_prompt
 
 st.set_page_config(page_title="Amazon クリエイティブ handoff", layout="centered")
 
@@ -37,18 +35,15 @@ with st.sidebar:
     st.button("ログアウト", on_click=st.logout)
 
 st.title("Amazon クリエイティブ handoff ツール")
-st.caption("商品情報 → 競合レビュー分析 → 構成・レイアウト → コピー →（P3）Codex handoff")
+st.caption("商品情報 → 競合レビュー分析 → 構成・コピー →（P3）Codex handoff")
 
 # ---- session_state 初期化 ----
 ss = st.session_state
 ss.setdefault("product", {})
 ss.setdefault("competitor_pains", "")
-ss.setdefault("layout", {})                 # 確定構成案 {layoutText, moodMemo, typeLabel, productName}
-ss.setdefault("layout_proposals_raw", "")   # 直近の構成案 AI 生テキスト
-ss.setdefault("layout_confirmed", False)    # ③ 確定ゲート
-ss.setdefault("copy_proposals_raw", "")     # 直近のコピー AI 生テキスト
-ss.setdefault("copy_confirmed", False)      # ④ 確定ゲート
-ss.setdefault("copy_text", "")              # 確定コピー（手編集テキスト）
+ss.setdefault("creative", {})            # 確定した構成＋コピー {text, moodMemo, typeLabel, productName}
+ss.setdefault("creative_raw", "")        # 直近の統合提案 AI 生テキスト
+ss.setdefault("creative_confirmed", False)  # ③ 確定ゲート
 
 # ---- ① 商品情報入力 ----
 st.header("① 商品情報")
@@ -120,30 +115,31 @@ ss["competitor_pains"] = st.text_area(
     label_visibility="collapsed",
 )
 
-# ---- ③ 構成・レイアウト案 ----
-st.header("③ 構成・レイアウト案")
+# ---- ③ 構成・コピー案（構成＋コピーを一度に提案）----
+st.header("③ 構成・コピー案")
 st.caption(
-    "商品情報＋『競合の不満点』から、AI が型（USP型／EPR悩みファースト型）を判断して 3 案提案します。"
-    "各案にページ全体の雰囲気メモ1行が付きます。1案を選んで手編集し確定すると ④ に進めます。送信前に概算コストを表示します。"
+    "商品情報＋『競合の不満点』から、AI が型（USP型／EPR悩みファースト型）を判断し、各スライドの"
+    "『役割／入れる要素／配置』と『キャッチ／サブ／本文』を一度に 2 案提案します。各案に雰囲気メモ1行が付きます。"
+    "1案を選んで手編集し確定すると、P3 の handoff（Codex への書き出し）に渡せます。送信前に概算コストを表示します。"
 )
 
-_sys_l, _usr_l = build_layout_prompt(ss["product"], ss.get("competitor_pains", ""))
-_yen_l = estimate_jpy(len(_sys_l) + len(_usr_l), PROPOSE_MAX_TOKENS)
-st.warning(f"概算コスト：約 {_yen_l} 円（claude-sonnet-4-6・3案提案）")
-if st.button("構成案を3案 提案する（課金発生）"):
+_sys, _usr = build_creative_prompt(ss["product"], ss.get("competitor_pains", ""))
+_yen = estimate_jpy(len(_sys) + len(_usr), COMBINED_MAX_TOKENS)
+st.warning(f"概算コスト：約 {_yen} 円（claude-sonnet-4-6・2案・構成＋コピー）")
+if st.button("構成・コピー案を2案 提案する（課金発生）"):
     key = st.secrets.get("ANTHROPIC_API_KEY", "")
     if not key:
         st.error("ANTHROPIC_API_KEY が未設定です（st.secrets を確認）。")
         st.stop()
     with st.spinner("提案を生成中…（数十秒かかる場合があります）"):
-        res = propose_layouts(key, ss["product"], ss.get("competitor_pains", ""))
+        res = propose_creative(key, ss["product"], ss.get("competitor_pains", ""))
     if res.truncated:
         st.warning("⚠ 出力が上限に達し、途中で切れた可能性があります。")
-    ss["layout_proposals_raw"] = res.text
-    ss["_layout_choice_prev"] = None  # 新しい提案が来たら選択バッファを作り直す
+    ss["creative_raw"] = res.text
+    ss["_creative_choice_prev"] = None  # 新しい提案が来たら選択バッファを作り直す
 
-if ss["layout_proposals_raw"]:
-    proposals = parse_layout_proposals(ss["layout_proposals_raw"])
+if ss["creative_raw"]:
+    proposals = parse_layout_proposals(ss["creative_raw"])
     if not proposals:
         st.error("提案の解析に失敗しました（『===案N===』区切りが見つかりません）。もう一度提案してください。")
     else:
@@ -153,66 +149,28 @@ if ss["layout_proposals_raw"]:
         ]
         idx = st.radio(
             "採用する案を選ぶ", range(len(proposals)),
-            format_func=lambda i: _labels[i], key="layout_choice",
+            format_func=lambda i: _labels[i], key="creative_choice",
         )
         # 選択が変わったら編集バッファ（widget key）を選択案で上書きしてから widget を生成する
-        if ss.get("_layout_choice_prev") != idx:
-            ss["layout_edit"] = proposals[idx].raw_text
+        if ss.get("_creative_choice_prev") != idx:
+            ss["creative_edit"] = proposals[idx].raw_text
             ss["mood_edit"] = proposals[idx].mood_memo
-            ss["_layout_choice_prev"] = idx
-        st.text_area("構成案テキスト（手編集可）", height=320, key="layout_edit")
+            ss["_creative_choice_prev"] = idx
+        st.text_area("構成・コピー案（手編集可・確定すると P3 handoff に渡る）", height=480, key="creative_edit")
         st.text_input("雰囲気メモ（1行・手編集可）", key="mood_edit")
-        if st.button("この構成案で確定"):
-            ss["layout"] = {
-                "layoutText": ss["layout_edit"],
+        if st.button("この内容で確定"):
+            ss["creative"] = {
+                "text": ss["creative_edit"],
                 "moodMemo": ss["mood_edit"],
                 "typeLabel": proposals[idx].type_label,
                 "productName": ss["product"].get("productName", ""),
             }
-            ss["layout_confirmed"] = True
-            ss["copy_confirmed"] = False  # 構成を変えたら下流コピーは無効化
-            st.success("✓ 構成案を確定しました。④ コピー案に進めます。")
+            ss["creative_confirmed"] = True
+            st.success("✓ 構成・コピー案を確定しました。（⑤ handoff 書き出しは P3 で実装）")
 
-if ss["layout_confirmed"]:
-    _lay = ss["layout"]
+if ss["creative_confirmed"]:
+    _c = ss["creative"]
     st.info(
-        f"確定済み構成案 … 型: {_lay.get('typeLabel') or '—'} ／ "
-        f"雰囲気メモ: {_lay.get('moodMemo') or '—'}（手編集して再度『確定』すれば上書き）"
+        f"確定済み構成・コピー案 … 型: {_c.get('typeLabel') or '—'} ／ "
+        f"雰囲気メモ: {_c.get('moodMemo') or '—'}（手編集して再度『確定』すれば上書き）"
     )
-
-# ---- ④ コピー案 ----
-st.header("④ コピー案")
-if not ss["layout_confirmed"]:
-    st.info("先に ③ 構成・レイアウト案を確定してください。確定すると、ここで各スライドのコピーを提案できます。")
-else:
-    st.caption(
-        "確定した構成案の各スライドに載せる『キャッチ／サブ／本文』を種類別に複数案提案します。"
-        "下書きを手編集して確定してください。薬機法・景表法の最終確認は人が目視で行います。送信前に概算コストを表示します。"
-    )
-    _sys_c, _usr_c = build_copy_prompt(ss["layout"], ss["product"], ss.get("competitor_pains", ""))
-    _yen_c = estimate_jpy(len(_sys_c) + len(_usr_c), COPY_MAX_TOKENS)
-    st.warning(f"概算コスト：約 {_yen_c} 円（claude-sonnet-4-6・コピー提案）")
-    if st.button("コピー案を提案する（課金発生）"):
-        key = st.secrets.get("ANTHROPIC_API_KEY", "")
-        if not key:
-            st.error("ANTHROPIC_API_KEY が未設定です（st.secrets を確認）。")
-            st.stop()
-        with st.spinner("提案を生成中…（数十秒かかる場合があります）"):
-            res = propose_copy(key, ss["layout"], ss["product"], ss.get("competitor_pains", ""))
-        if res.truncated:
-            st.warning("⚠ 出力が上限に達し、途中で切れた可能性があります。")
-        ss["copy_proposals_raw"] = res.text
-        slides = parse_copy_slides(res.text)
-        # 種類別の先頭案を採った下書きを編集欄へプリフィル（パース不能なら生テキスト）
-        ss["copy_text"] = build_copy_draft(slides) if slides else res.text
-        ss["copy_confirmed"] = False  # 再生成したら旧確定は無効化（未確定の下書きに確定バナーを出さない）
-
-    if ss["copy_proposals_raw"]:
-        with st.expander("AI 提案の全文（複数案・参照用）", expanded=False):
-            st.text(ss["copy_proposals_raw"])
-        st.text_area("確定コピー（種類別の下書きを手編集して確定）", height=400, key="copy_text")
-        if st.button("このコピーで確定"):
-            ss["copy_confirmed"] = True
-            st.success("✓ コピーを確定しました。（⑤ handoff 書き出しは P3 で実装）")
-        if ss["copy_confirmed"]:
-            st.info("確定済みコピーあり。⑤ handoff 生成（P3）で参照されます。手編集して再度『確定』すれば上書きできます。")
