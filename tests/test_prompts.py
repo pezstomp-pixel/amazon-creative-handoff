@@ -40,3 +40,36 @@ def test_layout_prompt_pain_fallback_when_empty():
     system, user = build_layout_prompt({"productName": "X"}, "")
     assert "（入力なし）" in user
     assert "でっち上げない" in user
+
+
+from lib.prompts import build_copy_prompt
+
+
+def test_copy_prompt_uses_layout_and_rules():
+    layout = {
+        "layoutText": "## スライド1：USP\n- キャッチ文案: 速く乾く",
+        "typeLabel": "USP型",
+        "productName": "珪藻土バスマット",
+    }
+    system, user = build_copy_prompt(
+        layout,
+        {"productName": "珪藻土バスマット", "features": "速乾"},
+        "乾きが遅いという不満",
+    )
+    assert "コピーライター" in system
+    assert "ハルシネーション禁止" in system
+    assert "勝ちパターン指針メモ" in system
+    assert "## スライド1：USP" in user
+    assert "USP型" in user
+    assert "乾きが遅いという不満" in user
+    assert "===スライド1：USP（最大の差別化）===" in user
+
+
+def test_copy_prompt_layout_fallback_text():
+    system, user = build_copy_prompt(
+        {"layoutText": "", "typeLabel": "", "productName": ""},
+        {"productName": "X"},
+        "",
+    )
+    assert "(構成案テキストなし)" in user
+    assert "（入力なし）" in user

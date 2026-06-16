@@ -118,3 +118,66 @@ def build_layout_prompt(product: dict, competitor_pains: str) -> tuple[str, str]
         "（同じ構造でさらに別の切り口）",
     ]
     return system, "\n".join(lines)
+
+
+def build_copy_prompt(layout: dict, product: dict, competitor_pains: str) -> tuple[str, str]:
+    """④ コピー案の (system, user) を返す。app/index.html buildCopyPrompt をポート。"""
+    layout = layout or {}
+    name      = _product_get(product, "productName")
+    features  = _product_get(product, "features")
+    target    = _product_get(product, "target")
+    tone      = _product_get(product, "brandTone")
+    ng        = _product_get(product, "ng")
+    pains = (competitor_pains or "").strip()
+
+    system = WIN_PATTERNS + """
+
+---
+あなたはAmazon物販のコピーライターです。上の指針メモ（訴求順序の骨格）を土台に、確定済みの構成案の各スライドに載せる「キャッチ／サブ／本文」コピーを、種類ごとに複数案（各3案前後）提案します。
+
+厳守事項:
+- §5の法務表現を必ず避ける（効果効能の断定＝治る/改善/解消、「安心」「安全」、Amazon文言、無根拠のNo.1/業界最高/他社比で圧倒的）。迷ったら具体的・客観的な事実に置き換える。
+- 【ハルシネーション禁止】商品情報・確定構成案・競合の不満点に無い、具体的な数値・スペック・実績・受賞・認証・第三者評価・体験談・順位を創作しない。素材が無いベネフィットは、数値や実績をでっち上げず、一般的・客観的な表現にとどめる（例:「耐荷重◯kg」「グッドデザイン賞受賞」「満足度98%」等を入力に無いのに書かない）。
+- 実物商品や画像の清書はしない（コピーのテキスト案のみ）。
+- §3のとおりキャッチが最重要（ベネフィットが伝わるか）。サブはキャッチを補強、本文は要素の説明。
+- 最終決定は人が行う前提で、選びやすい複数案を出す。法務判定そのものは人が行うので、AIは判定・フラグ付け・自動言い換えをしない。"""
+
+    lines = ["# 確定済みの構成案（この各スライドにコピーを肉付けする）"]
+    lines.append("商品名: " + (str(layout.get("productName", "")).strip() or name or "(未入力)"))
+    if str(layout.get("typeLabel", "")).strip():
+        lines.append("採用した型: " + str(layout.get("typeLabel")).strip())
+    lines.append("")
+    lines.append(str(layout.get("layoutText", "")).strip() or "(構成案テキストなし)")
+
+    lines.append("\n# 商品情報（コピーの素材）")
+    lines.append("商品名: " + (name or "(未入力)"))
+    if features: lines.append("特徴:\n" + features)
+    if target:   lines.append("ターゲット顧客: " + target)
+    if tone:     lines.append("ブランドトーン: " + tone)
+    if ng:       lines.append("NG要素（使わない表現・避けたい訴求）: " + ng)
+
+    lines.append("\n# 競合の不満点（悩み提起・比較・共感コピーの根拠に使う）")
+    if pains:
+        lines.append(pains)
+    else:
+        lines.append("（入力なし）競合の不満点の入力が無いため、このカテゴリの一般的な悩み／選定基準で一般論として書いてください（具体的な不満をでっち上げない）。")
+
+    lines += [
+        "\n# 出力指示",
+        "上の構成案の各スライドについて、そのスライドの役割に合うコピーを提案してください。各スライドを次の固定フォーマットで出力し、スライドの区切りを必ず「===スライドN：役割===」の行にしてください（パースに使います）。",
+        "各種類のコピーは「- 」で始まる行で各3案前後を列挙してください。比較表など本文が不要なスライドは [本文] ブロックごと省略してかまいません。",
+        "",
+        "===スライド1：USP（最大の差別化）===",
+        "[キャッチ]",
+        "- （案1。短く強く、ベネフィットが一瞬で伝わる一言）",
+        "- （案2）",
+        "- （案3）",
+        "[サブ]",
+        "- （案1。キャッチを補強する一文）",
+        "- （案2）",
+        "[本文]",
+        "- （案1。要素の説明文。不要なスライドは [本文] ごと省略可）",
+        "===スライド2：役割===",
+        "（以下、確定構成案のスライド数ぶん同じ構造で）",
+    ]
+    return system, "\n".join(lines)
