@@ -205,6 +205,7 @@ else:
         slides = parse_copy_slides(res.text)
         # 種類別の先頭案を採った下書きを編集欄へプリフィル（パース不能なら生テキスト）
         ss["copy_text"] = build_copy_draft(slides) if slides else res.text
+        ss["copy_confirmed"] = False  # 再生成したら旧確定は無効化（未確定の下書きに確定バナーを出さない）
 
     if ss["copy_proposals_raw"]:
         with st.expander("AI 提案の全文（複数案・参照用）", expanded=False):
@@ -213,6 +214,5 @@ else:
         if st.button("このコピーで確定"):
             ss["copy_confirmed"] = True
             st.success("✓ コピーを確定しました。（⑤ handoff 書き出しは P3 で実装）")
-
-    if ss["copy_confirmed"]:
-        st.info("確定済みコピーあり。⑤ handoff 生成（P3）で参照されます。手編集して再度『確定』すれば上書きできます。")
+        if ss["copy_confirmed"]:
+            st.info("確定済みコピーあり。⑤ handoff 生成（P3）で参照されます。手編集して再度『確定』すれば上書きできます。")
