@@ -47,7 +47,7 @@ _TYPE_LABEL = {"catch": "キャッチ", "sub": "サブ", "body": "本文"}
 class CopySlide:
     number: int
     role: str
-    options: dict  # {"catch": [str], "sub": [str], "body": [str]}
+    options: dict[str, list[str]]  # {"catch": [...], "sub": [...], "body": [...]}
 
 
 def parse_copy_slides(text: str) -> list[CopySlide]:
@@ -81,7 +81,8 @@ def build_copy_draft(slides: list[CopySlide]) -> str:
     人はこのテキストを手編集して確定する（種類別の手編集を簡素に実現）。"""
     out = []
     for s in slides:
-        out.append(f"===スライド{s.number}：{s.role}===")
+        # 役割が空（AIが「===スライドN===」のように省略）の場合は余計なコロンを出さない。
+        out.append(f"===スライド{s.number}：{s.role}===" if s.role else f"===スライド{s.number}===")
         for key in ("catch", "sub", "body"):
             opts = s.options.get(key, [])
             if opts:

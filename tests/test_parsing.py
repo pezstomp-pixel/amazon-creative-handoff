@@ -89,3 +89,13 @@ def test_build_copy_draft_picks_first_option_per_type():
     assert "===スライド2：比較===" in draft
     assert "キャッチ: D1" in draft
     assert "A2" not in draft  # 先頭案のみ採用（人が手編集で差し替える前提）
+
+
+def test_build_copy_draft_empty_role_omits_dangling_colon():
+    # AIが「===スライド1===」と役割を省略しても壊れたヘッダ（===スライド1：===）にしない。
+    slides = parse_copy_slides("===スライド1===\n[キャッチ]\n- A1\n")
+    assert slides[0].role == ""
+    draft = build_copy_draft(slides)
+    assert "===スライド1===" in draft
+    assert "：===" not in draft
+    assert "キャッチ: A1" in draft
