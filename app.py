@@ -12,7 +12,7 @@ from lib.claude_client import (
     COPY_MAX_TOKENS,
 )
 from lib.parsing import parse_layout_proposals, parse_copy_slides, build_copy_draft
-from lib.prompts import build_layout_prompt
+from lib.prompts import build_layout_prompt, build_copy_prompt
 
 st.set_page_config(page_title="Amazon クリエイティブ handoff", layout="centered")
 
@@ -37,7 +37,7 @@ with st.sidebar:
     st.button("ログアウト", on_click=st.logout)
 
 st.title("Amazon クリエイティブ handoff ツール")
-st.caption("商品情報 → 競合レビュー分析 →（P2以降）構成/コピー → Codex handoff")
+st.caption("商品情報 → 競合レビュー分析 → 構成・レイアウト → コピー →（P3）Codex handoff")
 
 # ---- session_state 初期化 ----
 ss = st.session_state
@@ -179,3 +179,40 @@ if ss["layout_confirmed"]:
         f"確定済み構成案 … 型: {_lay.get('typeLabel') or '—'} ／ "
         f"雰囲気メモ: {_lay.get('moodMemo') or '—'}（手編集して再度『確定』すれば上書き）"
     )
+
+# ---- ④ コピー案 ----
+st.header("④ コピー案")
+if not ss["layout_confirmed"]:
+    st.info("先に ③ 構成・レイアウト案を確定してください。確定すると、ここで各スライドのコピーを提案できます。")
+else:
+    st.caption(
+        "確定した構成案の各スライドに載せる『キャッチ／サブ／本文』を種類別に複数案提案します。"
+        "下書きを手編集して確定してください。薬機法・景表法の最終確認は人が目視で行います。送信前に概算コストを表示します。"
+    )
+    _sys_c, _usr_c = build_copy_prompt(ss["layout"], ss["product"], ss.get("competitor_pains", ""))
+    _yen_c = estimate_jpy(len(_sys_c) + len(_usr_c), COPY_MAX_TOKENS)
+    st.warning(f"概算コスト：約 {_yen_c} 円（claude-sonnet-4-6・コピー提案）")
+    if st.button("コピー案を提案する（課金発生）"):
+        key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        if not key:
+            st.error("ANTHROPIC_API_KEY が未設定です（st.secrets を確認）。")
+            st.stop()
+        with st.spinner("提案を生成中…（数十秒かかる場合があります）"):
+            res = propose_copy(key, ss["layout"], ss["product"], ss.get("competitor_pains", ""))
+        if res.truncated:
+            st.warning("⚠ 出力が上限に達し、途中で切れた可能性があります。")
+        ss["copy_proposals_raw"] = res.text
+        slides = parse_copy_slides(res.text)
+        # 種類別の先頭案を採った下書きを編集欄へプリフィル（パース不能なら生テキスト）
+        ss["copy_text"] = build_copy_draft(slides) if slides else res.text
+
+    if ss["copy_proposals_raw"]:
+        with st.expander("AI 提案の全文（複数案・参照用）", expanded=False):
+            st.text(ss["copy_proposals_raw"])
+        st.text_area("確定コピー（種類別の下書きを手編集して確定）", height=400, key="copy_text")
+        if st.button("このコピーで確定"):
+            ss["copy_confirmed"] = True
+            st.success("✓ コピーを確定しました。（⑤ handoff 書き出しは P3 で実装）")
+
+    if ss["copy_confirmed"]:
+        st.info("確定済みコピーあり。⑤ handoff 生成（P3）で参照されます。手編集して再度『確定』すれば上書きできます。")
