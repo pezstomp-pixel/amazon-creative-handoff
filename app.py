@@ -42,10 +42,11 @@ with st.form("product_form"):
     p["size"]        = st.text_input("形状・サイズ", p.get("size", ""))
     p["features"]    = st.text_area("商品の特徴（箇条書きでOK）", p.get("features", ""))
     p["target"]      = st.text_area("ターゲット顧客", p.get("target", ""))
+    _TONES = ["", "ミニマル", "ナチュラル", "高級感", "親しみやすい", "都会的"]
+    _tone_val = p.get("brandTone", "")
     p["brandTone"]   = st.selectbox(
-        "ブランドトーン",
-        ["", "ミニマル", "ナチュラル", "高級感", "親しみやすい", "都会的"],
-        index=0,
+        "ブランドトーン", _TONES,
+        index=_TONES.index(_tone_val) if _tone_val in _TONES else 0,
     )
     p["ng"]          = st.text_area("NG要素（避けたい表現・訴求）", p.get("ng", ""))
     if st.form_submit_button("商品情報を保存"):
