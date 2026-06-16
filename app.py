@@ -7,21 +7,25 @@ from lib.claude_client import analyze_reviews, ANALYZE_MAX_TOKENS
 
 st.set_page_config(page_title="Amazon クリエイティブ handoff", layout="centered")
 
-# ---- 認証ゲート（Community Cloud private が主・アプリ側は defense-in-depth） ----
-def _current_email() -> str | None:
-    user = getattr(st, "user", None)
-    if user is not None:
-        try:
-            return user.get("email")  # Streamlit 新 API
-        except Exception:
-            return getattr(user, "email", None)
-    return None
-
-allowed = st.secrets.get("APP_ALLOWED_USERS", [])
-email = _current_email()
-if not is_authorized(email, list(allowed)):
-    st.error("このアプリへのアクセス権がありません。管理者に連絡してください。")
+# ---- 認証ゲート: Google ログイン (OIDC・st.login) ＋ 許可メール allowlist ----
+# secrets.toml の [auth] が必須（未設定だと st.user 参照でエラー）。
+# public リポ/アプリでも、ここでログインと allowlist を必ず通すため第三者は使えない。
+if not st.user.is_logged_in:
+    st.title("Amazon クリエイティブ handoff ツール")
+    st.info("社内向けツールです。許可された Google アカウントでログインしてください。")
+    st.button("Google でログイン", on_click=st.login)
     st.stop()
+
+email = getattr(st.user, "email", None)
+allowed = st.secrets.get("APP_ALLOWED_USERS", [])
+if not is_authorized(email, list(allowed)):
+    st.error(f"このアカウント（{email}）にはアクセス権がありません。管理者に連絡してください。")
+    st.button("別アカウントでログアウト", on_click=st.logout)
+    st.stop()
+
+with st.sidebar:
+    st.caption(f"ログイン中: {email}")
+    st.button("ログアウト", on_click=st.logout)
 
 st.title("Amazon クリエイティブ handoff ツール")
 st.caption("商品情報 → 競合レビュー分析 →（P2以降）構成/コピー → Codex handoff")
