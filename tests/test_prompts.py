@@ -13,7 +13,7 @@ def test_review_prompt_empty_list():
     system, user = build_review_analysis_prompt([])
     assert "0 件" in user
 
-from lib.prompts import WIN_PATTERNS, build_layout_prompt
+from lib.prompts import WIN_PATTERNS
 
 
 def test_win_patterns_has_core_sections():
@@ -22,54 +22,31 @@ def test_win_patterns_has_core_sections():
     assert "EPR" in WIN_PATTERNS
 
 
-def test_layout_prompt_includes_product_and_pains():
-    system, user = build_layout_prompt(
+from lib.prompts import build_creative_prompt
+
+
+def test_creative_prompt_combines_structure_and_copy():
+    system, user = build_creative_prompt(
         {"productName": "珪藻土バスマット", "features": "速乾", "brandTone": "ナチュラル"},
         "乾きが遅いという不満",
     )
     assert "勝ちパターン指針メモ" in system
-    assert "構成・レイアウト設計担当" in system
+    assert "コピー" in system
+    assert "ハルシネーション禁止" in system
+    assert "§5" in system
     assert "珪藻土バスマット" in user
     assert "ナチュラル" in user
     assert "乾きが遅いという不満" in user
+    assert "構成・コピー案を必ず2案" in user
     assert "===案1===" in user
-    assert "雰囲気メモ" in user
+    assert "【雰囲気メモ】" in user
+    assert "## スライド1" in user
+    assert "[キャッチ]" in user
+    assert "[サブ]" in user
+    assert "[本文]" in user
 
 
-def test_layout_prompt_pain_fallback_when_empty():
-    system, user = build_layout_prompt({"productName": "X"}, "")
+def test_creative_prompt_pain_fallback_when_empty():
+    system, user = build_creative_prompt({"productName": "X"}, "")
     assert "（入力なし）" in user
     assert "でっち上げない" in user
-
-
-from lib.prompts import build_copy_prompt
-
-
-def test_copy_prompt_uses_layout_and_rules():
-    layout = {
-        "layoutText": "## スライド1：USP\n- キャッチ文案: 速く乾く",
-        "typeLabel": "USP型",
-        "productName": "珪藻土バスマット",
-    }
-    system, user = build_copy_prompt(
-        layout,
-        {"productName": "珪藻土バスマット", "features": "速乾"},
-        "乾きが遅いという不満",
-    )
-    assert "コピーライター" in system
-    assert "ハルシネーション禁止" in system
-    assert "勝ちパターン指針メモ" in system
-    assert "## スライド1：USP" in user
-    assert "USP型" in user
-    assert "乾きが遅いという不満" in user
-    assert "===スライド1：USP（最大の差別化）===" in user
-
-
-def test_copy_prompt_layout_fallback_text():
-    system, user = build_copy_prompt(
-        {"layoutText": "", "typeLabel": "", "productName": ""},
-        {"productName": "X"},
-        "",
-    )
-    assert "(構成案テキストなし)" in user
-    assert "（入力なし）" in user
