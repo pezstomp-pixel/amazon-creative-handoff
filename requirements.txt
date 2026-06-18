@@ -6,3 +6,4 @@ openpyxl==3.1.5
 pytest>=8.0
 # P3: SP-API / Dropbox / ZIP は stdlib のみ（新規依存なし）。本行は Cloud 再ビルド強制用。
 # 2026-06-18: WIN_PATTERNS を正典 win_patterns.md §0〜§6 に同期＋出力比率 2:3。再ビルド強制。
+# 2026-06-18: WIN_PATTERNS に §7 コピーライティング（FAB/QUEST/BTRNUTSS等）を追加同期。再ビルド強制。

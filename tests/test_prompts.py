@@ -20,6 +20,10 @@ def test_win_patterns_has_core_sections():
     assert "勝ちパターン指針メモ" in WIN_PATTERNS
     assert "§5 法務" in WIN_PATTERNS
     assert "EPR" in WIN_PATTERNS
+    # §7 コピーライティング（正典 win_patterns.md と同期・2026-06-18）
+    assert "§7" in WIN_PATTERNS
+    assert "FAB" in WIN_PATTERNS
+    assert "BTRNUTSS" in WIN_PATTERNS
 
 
 from lib.prompts import build_creative_prompt
