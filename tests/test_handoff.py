@@ -33,7 +33,7 @@ def test_build_handoff_md_includes_all_sections():
     assert "ref_B071FSRQGF_MAIN.jpg" in md
     assert "B071FSRQGF" in md
     assert "文字なし" in md          # 背景要件
-    assert "1:1" in md              # 比率要件
+    assert "2:3" in md              # 比率要件（縦長 横1200×縦1800）
     assert "A+" in md               # A+ 非取得の注記
 
 

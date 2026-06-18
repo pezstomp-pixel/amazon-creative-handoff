@@ -60,5 +60,5 @@ def test_codex_fixed_prompt_states_invariants():
     assert "文字なし" in p          # 文字を入れない
     assert "実物" in p              # 実物商品を合成しない
     assert "handoff.md" in p        # 添付指示書に従う
-    assert "1:1" in p               # 出力比率
+    assert "2:3" in p               # 出力比率（縦長 横1200×縦1800）
     assert "Photoshop" in p         # 文字入れ・合成は人

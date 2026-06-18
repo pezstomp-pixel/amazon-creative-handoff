@@ -63,7 +63,7 @@ def build_handoff_md(product: dict, competitor_pains: str,
     lines.append("\n## 4. 背景／使用シーンに求める要件")
     lines.append("- 文字なし・実物商品なし（文字入れ・実物合成は人が Photoshop で行う）。")
     lines.append("- 雰囲気メモのトーン＆マナーに沿う。各スライドの役割・意図に合わせる。")
-    lines.append("- 出力比率は正方形 1:1（Amazonサブ画像前提・1000×1000px以上）。")
+    lines.append("- 出力比率は縦長 2:3（横1200×縦1800px・Amazonサブ画像前提・スマホ画面占有率優先）。")
     lines.append("- 確定コピーは余白・構図設計の参考。画像に文字は入れない。")
 
     lines.append("\n## 5. 同梱の参考画像（競合 ASIN のメイン／サブ画像）")
