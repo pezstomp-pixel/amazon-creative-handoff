@@ -4,3 +4,4 @@ anthropic==0.109.2
 pandas==3.0.3
 openpyxl==3.1.5
 pytest>=8.0
+# P3: SP-API / Dropbox / ZIP は stdlib のみ（新規依存なし）。本行は Cloud 再ビルド強制用。
