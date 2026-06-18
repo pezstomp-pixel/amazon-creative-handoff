@@ -83,3 +83,12 @@ def build_handoff_md(product: dict, competitor_pains: str,
                  "競合 ASIN のカタログ露出枚数は商品により差があります。")
 
     return "\n".join(lines)
+
+
+def build_zip(files: dict) -> bytes:
+    """{ファイル名: bytes} を ZIP（bytes）にまとめる。ブラウザ DL 用。"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    return buf.getvalue()

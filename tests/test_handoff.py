@@ -47,3 +47,22 @@ def test_build_handoff_md_handles_empty_refs_and_missing_fields():
     assert "X" in md
     assert "（参考画像なし）" in md
     assert "（入力なし）" in md
+
+
+import io
+import zipfile
+from lib.handoff import build_zip
+
+
+def test_build_zip_contains_all_files_with_bytes():
+    data = build_zip({"handoff.md": "こんにちは".encode("utf-8"),
+                      "ref_A_MAIN.jpg": b"\xff\xd8\xff"})
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    assert set(zf.namelist()) == {"handoff.md", "ref_A_MAIN.jpg"}
+    assert zf.read("handoff.md").decode("utf-8") == "こんにちは"
+    assert zf.read("ref_A_MAIN.jpg") == b"\xff\xd8\xff"
+
+
+def test_build_zip_empty_dict_is_valid_empty_archive():
+    zf = zipfile.ZipFile(io.BytesIO(build_zip({})))
+    assert zf.namelist() == []
