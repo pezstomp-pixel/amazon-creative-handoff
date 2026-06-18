@@ -10,7 +10,11 @@ from lib.claude_client import (
     COMBINED_MAX_TOKENS,
 )
 from lib.parsing import parse_layout_proposals
-from lib.prompts import build_creative_prompt
+from lib.prompts import build_creative_prompt, CODEX_FIXED_PROMPT
+from lib import amazon_spapi as spapi
+from lib import handoff as ho
+from lib import dropbox_client as dbx
+from datetime import datetime, timezone, timedelta
 
 st.set_page_config(page_title="Amazon クリエイティブ handoff", layout="centered")
 
@@ -44,6 +48,8 @@ ss.setdefault("competitor_pains", "")
 ss.setdefault("creative", {})            # 確定した構成＋コピー {text, moodMemo, typeLabel, productName}
 ss.setdefault("creative_raw", "")        # 直近の統合提案 AI 生テキスト
 ss.setdefault("creative_confirmed", False)  # ③ 確定ゲート
+ss.setdefault("ref_asins_raw", "")       # ⑤ 参考 ASIN 入力（1行1ASIN）
+ss.setdefault("ref_images", [])          # list[ho.RefImage] 取得済み参考画像（bytes 同梱）
 
 # ---- ① 商品情報入力 ----
 st.header("① 商品情報")
@@ -174,3 +180,65 @@ if ss["creative_confirmed"]:
         f"確定済み構成・コピー案 … 型: {_c.get('typeLabel') or '—'} ／ "
         f"雰囲気メモ: {_c.get('moodMemo') or '—'}（手編集して再度『確定』すれば上書き）"
     )
+
+# ---- ⑤ Codex handoff（固定プロンプト＋参考画像＋書き出し）----
+st.header("⑤ Codex handoff 書き出し")
+if not ss["creative_confirmed"]:
+    st.info("先に ③ 構成・コピー案を確定してください。確定すると、ここで Codex 用の handoff を書き出せます。")
+else:
+    st.subheader("固定プロンプト（Codex app に貼る）")
+    st.caption("Codex app の入力欄にこの文をそのまま貼り付け、書き出した handoff フォルダを添付してください（毎回同じ文面）。")
+    st.code(CODEX_FIXED_PROMPT, language="text")  # st.code 右上のコピーボタンで取得
+
+    st.subheader("参考にする競合 ASIN")
+    st.caption(
+        "競合商品の ASIN を1行に1つ入力 →「画像取得」で SP-API からメイン／サブ画像を取得します。"
+        "取得画像はサムネで確認でき、handoff フォルダに同梱されます（Codex の構図・余白の参考用）。"
+    )
+    ss["ref_asins_raw"] = st.text_area(
+        "参考 ASIN（1行に1つ）", ss.get("ref_asins_raw", ""), height=100,
+        placeholder="B071FSRQGF\nB0XXXXXXXX",
+    )
+    if st.button("画像取得（SP-API）"):
+        asins = [a.strip() for a in ss["ref_asins_raw"].splitlines() if a.strip()]
+        cid = st.secrets.get("SP_API_LWA_APP_ID", "")
+        csec = st.secrets.get("SP_API_LWA_CLIENT_SECRET", "")
+        rtok = st.secrets.get("SP_API_REFRESH_TOKEN", "")
+        if not (cid and csec and rtok):
+            st.error("SP-API の認証情報が未設定です（st.secrets の SP_API_LWA_APP_ID / "
+                     "SP_API_LWA_CLIENT_SECRET / SP_API_REFRESH_TOKEN を確認）。")
+        elif not asins:
+            st.warning("ASIN を1つ以上入力してください。")
+        else:
+            collected = []
+            with st.spinner("SP-API から画像を取得中…"):
+                try:
+                    token = spapi.get_access_token(cid, csec, rtok)
+                    for asin in asins:
+                        item = spapi.get_catalog_item(asin, token)
+                        pairs = spapi.collect_all_images(item.get("images", []))
+                        if not pairs:
+                            st.warning(f"{asin}: 画像が取得できませんでした（カタログ露出なし）。")
+                            continue
+                        for variant, link in pairs:
+                            try:
+                                data = spapi.download_image_bytes(link)
+                            except Exception as e:
+                                st.warning(f"{asin} {variant}: 画像DL失敗（{e}）。スキップします。")
+                                continue
+                            collected.append(ho.RefImage(
+                                asin=asin, variant=variant,
+                                filename=ho.ref_filename(asin, variant), data=data,
+                            ))
+                except spapi.SpApiError as e:
+                    st.error(f"SP-API エラー: {e}")
+            ss["ref_images"] = collected
+            if collected:
+                st.success(f"✓ {len(collected)} 枚の参考画像を取得しました。")
+
+    if ss["ref_images"]:
+        st.caption(f"取得済み参考画像: {len(ss['ref_images'])} 枚")
+        cols = st.columns(4)
+        for i, r in enumerate(ss["ref_images"]):
+            with cols[i % 4]:
+                st.image(r.data, caption=f"{r.asin} / {r.variant}", width=140)
