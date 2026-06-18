@@ -50,3 +50,15 @@ def test_creative_prompt_pain_fallback_when_empty():
     system, user = build_creative_prompt({"productName": "X"}, "")
     assert "（入力なし）" in user
     assert "でっち上げない" in user
+
+
+from lib.prompts import CODEX_FIXED_PROMPT
+
+
+def test_codex_fixed_prompt_states_invariants():
+    p = CODEX_FIXED_PROMPT
+    assert "文字なし" in p          # 文字を入れない
+    assert "実物" in p              # 実物商品を合成しない
+    assert "handoff.md" in p        # 添付指示書に従う
+    assert "1:1" in p               # 出力比率
+    assert "Photoshop" in p         # 文字入れ・合成は人
