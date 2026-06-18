@@ -31,6 +31,15 @@ def _read_json(resp) -> dict:
     return json.loads(resp.read().decode("utf-8"))
 
 
+def _http_error_detail(e) -> str:
+    """HTTPError 本文の先頭を安全に読む（診断用・最大 500 文字）。本番デバッグで原因を出す。"""
+    try:
+        body = e.read().decode("utf-8", "replace").strip()
+    except Exception:
+        return ""
+    return f" {body[:500]}" if body else ""
+
+
 def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
     body = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -46,7 +55,7 @@ def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> 
             code = resp.getcode()
             data = _read_json(resp)
     except urllib.error.HTTPError as e:
-        raise SpApiError(f"LWA token HTTP {e.code}") from e
+        raise SpApiError(f"LWA token HTTP {e.code}{_http_error_detail(e)}") from e
     if code != 200 or "access_token" not in data:
         raise SpApiError(f"LWA token 失敗: {data}")
     return data["access_token"]
@@ -75,7 +84,7 @@ def _catalog_get(url: str, access_token: str, *, what: str) -> dict:
             if e.code == 429 and attempt < _CATALOG_MAX_ATTEMPTS - 1:
                 time.sleep(_CATALOG_BACKOFF_BASE * (2 ** attempt))
                 continue
-            raise SpApiError(f"Catalog HTTP {e.code} {what}") from e
+            raise SpApiError(f"Catalog HTTP {e.code} {what}{_http_error_detail(e)}") from e
     raise SpApiError(f"Catalog 429 リトライ上限 {what}")  # 保険（通常到達しない）
 
 

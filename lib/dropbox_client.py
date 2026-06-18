@@ -15,6 +15,15 @@ class DropboxError(Exception):
     pass
 
 
+def _http_error_detail(e) -> str:
+    """HTTPError 本文の先頭を安全に読む（診断用・最大 500 文字）。Dropbox は JSON で理由を返す。"""
+    try:
+        body = e.read().decode("utf-8", "replace").strip()
+    except Exception:
+        return ""
+    return f" {body[:500]}" if body else ""
+
+
 def get_access_token(app_key: str, app_secret: str, refresh_token: str) -> str:
     body = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -29,7 +38,7 @@ def get_access_token(app_key: str, app_secret: str, refresh_token: str) -> str:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        raise DropboxError(f"Dropbox token HTTP {e.code}") from e
+        raise DropboxError(f"Dropbox token HTTP {e.code}{_http_error_detail(e)}") from e
     if "access_token" not in data:
         raise DropboxError(f"Dropbox token 失敗: {data}")
     return data["access_token"]
@@ -59,7 +68,7 @@ def upload_file(access_token: str, path: str, data: bytes) -> None:
             if resp.getcode() not in (200, 201):
                 raise DropboxError(f"Dropbox upload HTTP {resp.getcode()} {path}")
     except urllib.error.HTTPError as e:
-        raise DropboxError(f"Dropbox upload HTTP {e.code} {path}") from e
+        raise DropboxError(f"Dropbox upload HTTP {e.code} {path}{_http_error_detail(e)}") from e
 
 
 def upload_files(app_key: str, app_secret: str, refresh_token: str,

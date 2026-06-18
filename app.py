@@ -211,6 +211,7 @@ else:
             st.warning("ASIN を1つ以上入力してください。")
         else:
             collected = []
+            ok = False
             with st.spinner("SP-API から画像を取得中…"):
                 try:
                     token = spapi.get_access_token(cid, csec, rtok)
@@ -230,11 +231,14 @@ else:
                                 asin=asin, variant=variant,
                                 filename=ho.ref_filename(asin, variant), data=data,
                             ))
+                    ok = True
                 except spapi.SpApiError as e:
-                    st.error(f"SP-API エラー: {e}")
-            ss["ref_images"] = collected
-            if collected:
-                st.success(f"✓ {len(collected)} 枚の参考画像を取得しました。")
+                    st.error(f"SP-API エラー: {e}（既存の取得結果は保持します）")
+            # 途中で失敗したら既存の取得済みセットを部分結果で壊さない（成功時のみ反映）
+            if ok:
+                ss["ref_images"] = collected
+                if collected:
+                    st.success(f"✓ {len(collected)} 枚の参考画像を取得しました。")
 
     if ss["ref_images"]:
         st.caption(f"取得済み参考画像: {len(ss['ref_images'])} 枚")
