@@ -39,7 +39,7 @@ with st.sidebar:
     st.button("ログアウト", on_click=st.logout)
 
 st.title("Amazon クリエイティブ handoff ツール")
-st.caption("商品情報 → 競合レビュー分析 → 構成・コピー →（P3）Codex handoff")
+st.caption("商品情報 → 競合レビュー分析 → 構成・コピー → Codex handoff（固定プロンプト＋参考画像＋Dropbox/ZIP）")
 
 # ---- session_state 初期化 ----
 ss = st.session_state
@@ -242,3 +242,50 @@ else:
         for i, r in enumerate(ss["ref_images"]):
             with cols[i % 4]:
                 st.image(r.data, caption=f"{r.asin} / {r.variant}", width=140)
+
+    st.subheader("handoff フォルダを書き出す")
+    st.caption(
+        "handoff.md と取得済み参考画像をまとめて書き出します。"
+        "Dropbox（共有フォルダ）へ直接アップロードし、ZIP もダウンロードできます。"
+    )
+    if st.button("handoff を書き出す"):
+        # 同梱ファイルを組み立て（handoff.md ＋ 参考画像）
+        md = ho.build_handoff_md(
+            ss["product"], ss.get("competitor_pains", ""), ss["creative"], ss["ref_images"],
+        )
+        files = {"handoff.md": md.encode("utf-8")}
+        for r in ss["ref_images"]:
+            files[r.filename] = r.data
+
+        jst = timezone(timedelta(hours=9))
+        stamp = datetime.now(jst).strftime("%Y%m%d_%H%M")
+        folder = ho.folder_name(ss["product"].get("productName", ""), stamp)
+
+        # ZIP は常に提供（Dropbox 未設定でも動く）
+        ss["handoff_zip"] = ho.build_zip(files)
+        ss["handoff_zip_name"] = f"{folder}.zip"
+
+        # Dropbox は secrets が揃っているときのみ
+        app_key = st.secrets.get("DROPBOX_APP_KEY", "")
+        app_secret = st.secrets.get("DROPBOX_APP_SECRET", "")
+        rtok = st.secrets.get("DROPBOX_REFRESH_TOKEN", "")
+        base = st.secrets.get("DROPBOX_BASE_PATH", "")
+        if app_key and app_secret and rtok and base:
+            remote = dbx.remote_folder_path(base, folder)
+            with st.spinner(f"Dropbox にアップロード中… {remote}"):
+                try:
+                    dbx.upload_files(app_key, app_secret, rtok, remote, files)
+                    st.success(f"✓ Dropbox にアップロードしました：{remote}")
+                except dbx.DropboxError as e:
+                    st.error(f"Dropbox アップロード失敗: {e}（ZIP ダウンロードをご利用ください）")
+        else:
+            st.info("Dropbox の secrets（DROPBOX_APP_KEY/SECRET/REFRESH_TOKEN/BASE_PATH）が未設定のため、"
+                    "ZIP ダウンロードのみ提供します。")
+
+    if ss.get("handoff_zip"):
+        st.download_button(
+            "handoff ZIP をダウンロード", data=ss["handoff_zip"],
+            file_name=ss.get("handoff_zip_name", "handoff.zip"), mime="application/zip",
+        )
+        st.caption("画像生成・採用選択・PS 仕上げはツール外（Codex／人）で行います。"
+                   "この ZIP／フォルダを Codex app に添付し、上の固定プロンプトを貼って生成へ進めてください。")
